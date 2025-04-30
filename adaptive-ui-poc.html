@@ -1,0 +1,183 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Adaptive UI Demo</title>
+  <style>
+    :root {
+      --bg-color: #ffffff;
+      --text-color: #000000;
+      --font-size: 16px;
+      --btn-size: 1em;
+    }
+
+    body {
+      background-color: var(--bg-color);
+      color: var(--text-color);
+      font-size: var(--font-size);
+      transition: all 0.3s ease;
+      padding: 2em;
+    }
+
+    .dark {
+      --bg-color: #111;
+      --text-color: #f1f1f1;
+    }
+
+    .large-font {
+      --font-size: 20px;
+    }
+
+    .button {
+      padding: calc(var(--btn-size) * 0.75) calc(var(--btn-size) * 1.5);
+      font-size: 1em;
+      background-color: #007bff;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: transform 0.2s;
+    }
+
+    .collapsed {
+      display: none;
+    }
+
+    .container {
+      max-width: 600px;
+      margin: auto;
+    }
+
+    .theme-toggle {
+      margin-top: 1em;
+    }
+  </style>
+</head>
+<body>
+  <div class="container" id="mainContent">
+    <h1>Adaptive UI</h1>
+    <p>This UI adapts to your environment and behavior in real time.</p>
+    <button class="button">Click Me</button>
+    <button class="button theme-toggle" onclick="toggleTheme()">Toggle Theme</button>
+  </div>
+
+  <script>
+    function applyStoredTheme() {
+      const stored = localStorage.getItem('theme');
+      if (stored) {
+        document.body.classList.toggle('dark', stored === 'dark');
+      } else {
+        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        const hour = new Date().getHours();
+        if (prefersDark || hour < 6 || hour > 20) {
+          document.body.classList.add('dark');
+        }
+      }
+    }
+
+    function toggleTheme() {
+      const isDark = document.body.classList.toggle('dark');
+      localStorage.setItem('theme', isDark ? 'dark' : 'light');
+    }
+
+    // Ambient Light Sensor
+    if ('AmbientLightSensor' in window) {
+      try {
+        const sensor = new AmbientLightSensor();
+        sensor.addEventListener('reading', () => {
+          if (sensor.illuminance < 30) {
+            document.body.classList.add('dark');
+          } else {
+            document.body.classList.remove('dark');
+          }
+        });
+        sensor.start();
+      } catch (err) {
+        console.error('Ambient Light Sensor error:', err);
+      }
+    }
+
+    // Geolocation + Sunrise/Sunset API
+    function fetchSunriseSunset(lat, lon) {
+      fetch(`https://api.sunrise-sunset.org/json?lat=${lat}&lng=${lon}&formatted=0`)
+        .then(res => res.json())
+        .then(data => {
+          const now = new Date();
+          const sunset = new Date(data.results.sunset);
+          const sunrise = new Date(data.results.sunrise);
+
+          if (now < sunrise || now > sunset) {
+            document.body.classList.add('dark');
+          } else {
+            document.body.classList.remove('dark');
+          }
+        })
+        .catch(err => console.error("Sunrise API error:", err));
+    }
+
+    function detectOutsideLightViaGeo() {
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            const { latitude, longitude } = position.coords;
+            fetchSunriseSunset(latitude, longitude);
+          },
+          (error) => {
+            console.warn("Geolocation denied or failed:", error);
+          }
+        );
+      }
+    }
+
+    // Idle detection
+    let idleTimer;
+    function resetIdleTimer() {
+      clearTimeout(idleTimer);
+      idleTimer = setTimeout(() => {
+        document.getElementById("mainContent").classList.add("collapsed");
+      }, 60000);
+    }
+
+    // Scroll speed
+    let lastScrollTop = 0, lastTime = Date.now();
+    window.addEventListener('scroll', () => {
+      const now = Date.now();
+      const scrollTop = window.scrollY;
+      const delta = Math.abs(scrollTop - lastScrollTop);
+      const timeDelta = now - lastTime;
+
+      if (timeDelta > 0 && (delta / timeDelta) > 0.5) {
+        document.body.style.setProperty('--btn-size', '1.5em');
+      }
+
+      lastScrollTop = scrollTop;
+      lastTime = now;
+      resetIdleTimer();
+    });
+
+    // Mouse movement
+    window.addEventListener('mousemove', (e) => {
+      if (e.movementX > 20 || e.movementY > 20) {
+        document.body.style.setProperty('--btn-size', '1.2em');
+      }
+      resetIdleTimer();
+    });
+
+    // Focus/blur
+    window.addEventListener('blur', () => {
+      document.title = "Come back!";
+    });
+
+    window.addEventListener('focus', () => {
+      document.title = "Adaptive UI";
+    });
+
+    // Init
+    applyStoredTheme();
+    resetIdleTimer();
+    detectOutsideLightViaGeo();
+  </script>
+</body>
+</html>
